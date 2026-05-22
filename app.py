@@ -3,81 +3,119 @@ import pandas as pd
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from mcp.server.fastmcp import FastMCP
+import os
+import requests
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+HUBSPOT_TOKEN = os.getenv("HUBSPOT_TOKEN")
+
 
 app = FastAPI()
 
-mcp = FastMCP("delivery-demo-app")
+mcp = FastMCP("hubspot-demo-app")
 
+BASE_URL = "https://api.hubapi.com"
 
-EXCEL_PATH = "data_delivery.xlsx"
+def hubspot_get(endpoint: str, params: dict = None):
+    headers = {
+        "Authorization": f"Bearer {HUBSPOT_TOKEN}",
+        "Content-Type": "application/json"
+    }
 
-
-@mcp.tool()
-def get_all_delivery_data() -> list:
-    """
-    Return all delivery data from Excel.
-    """
-    print("TOOL CALLED: get_all_delivery_data")
-
-    df = pd.read_excel(EXCEL_PATH)
-
-    return df.to_dict(orient="records")
-
-
-@mcp.tool()
-def get_delivery_by_zone(zone_id: int) -> list:
-    """
-    Get delivery prices for a specific zone.
-    """
-    print("TOOL CALLED: get_delivery_by_zone")
-
-    df = pd.read_excel(EXCEL_PATH)
-
-    filtered = df[df["id_zone"] == zone_id]
-
-    return filtered.to_dict(orient="records")
-
-
-@mcp.tool()
-def get_delivery_by_carrier(carrier_name: str) -> list:
-    """
-    Get delivery rows by carrier name.
-    """
-    print("TOOL CALLED: get_delivery_by_carrier")
-
-    df = pd.read_excel(EXCEL_PATH)
-
-    filtered = df[
-        df["carrier_name"].str.lower().str.contains(
-            carrier_name.lower(),
-            na=False
-        )
-    ]
-
-    return filtered.to_dict(orient="records")
-
-
-@mcp.tool()
-def get_max_delivery_price() -> dict:
-    """
-    Get the highest delivery price.
-    """
-    print("TOOL CALLED: get_max_delivery_price")
-
-    df = pd.read_excel(EXCEL_PATH)
-
-    prices = (
-        df["price"]
-        .astype(str)
-        .str.replace(".", "", regex=False)
-        .astype(int)
+    response = requests.get(
+        f"{BASE_URL}{endpoint}",
+        headers=headers,
+        params=params
     )
 
-    max_price = prices.max()
+    response.raise_for_status()
 
-    return {
-        "max_delivery_price": int(max_price)
+    return response.json()
+
+@mcp.tool()
+def get_all_contacts() -> list:
+    """
+    Get all HubSpot contacts.
+    """
+
+    print("TOOL CALLED: get_all_contacts")
+
+    data = hubspot_get(
+        "/crm/v3/objects/contacts",
+        {
+            "limit": 100,
+            "properties": "firstname,lastname,email"
+        }
+    )
+
+    return data.get("results", [])
+
+@mcp.tool()
+def get_all_deals() -> list:
+    """
+    Get all HubSpot deals.
+    """
+
+    print("TOOL CALLED: get_all_deals")
+
+    data = hubspot_get(
+        "/crm/v3/objects/deals",
+        {
+            "limit": 100,
+            "properties": "dealname,amount,dealstage"
+        }
+    )
+
+    return data.get("results", [])
+
+@mcp.tool()
+def search_contact_by_email(email: str) -> list:
+    """
+    Search HubSpot contact by email.
+    """
+
+    print("TOOL CALLED: search_contact_by_email")
+
+    headers = {
+        "Authorization": f"Bearer {HUBSPOT_TOKEN}",
+        "Content-Type": "application/json"
     }
+
+    body = {
+        "filterGroups": [
+            {
+                "filters": [
+                    {
+                        "propertyName": "email",
+                        "operator": "EQ",
+                        "value": email
+                    }
+                ]
+            }
+        ],
+        "properties": [
+            "firstname",
+            "lastname",
+            "email"
+        ],
+        "limit": 10
+    }
+
+    response = requests.post(
+        f"{BASE_URL}/crm/v3/objects/contacts/search",
+        headers=headers,
+        json=body
+    )
+
+    response.raise_for_status()
+
+    data = response.json()
+
+    return data.get("results", [])
+
 
 
 @app.get("/")
@@ -86,51 +124,9 @@ async def root():
         "status": "ok"
     }
 
-
-@app.get("/widget/hello")
-async def hello_widget():
-    return HTMLResponse("""
-    <html>
-      <body style="font-family:sans-serif;padding:20px;">
-        <h1>Delivery MCP App</h1>
-        <p>Excel delivery data connected successfully.</p>
-      </body>
-    </html>
-    """)
-
-
-@app.get("/ui/delivery", response_class=HTMLResponse)
-def delivery_ui():
-    df = pd.read_excel(EXCEL_PATH)
-
-    html_table = df.to_html(index=False)
-
-    return f"""
-    <html>
-      <head>
-        <title>Delivery Dashboard</title>
-      </head>
-      <body style="font-family: sans-serif; padding: 20px;">
-        <h1>📦 Delivery Data</h1>
-        <p>Simple MCP Demo UI</p>
-        {html_table}
-      </body>
-    </html>
-    """
-
-@app.get("/ui/zone/{zone_id}", response_class=HTMLResponse)
-def ui_by_zone(zone_id: int):
-    df = pd.read_excel(EXCEL_PATH)
-    filtered = df[df["id_zone"] == zone_id]
-
-    return f"""
-    <html>
-      <body style="font-family:sans-serif;padding:20px;">
-        <h2>Zone {zone_id}</h2>
-        {filtered.to_html(index=False)}
-      </body>
-    </html>
-    """
+@app.get("/test")
+def test():
+    return get_all_contacts()
 
 
 # MCP SSE transport
