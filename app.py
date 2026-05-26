@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse
 from mcp.server.fastmcp import FastMCP
 import os
 import requests
+import json
 
 from dotenv import load_dotenv
 
@@ -37,15 +38,13 @@ def hubspot_get(endpoint: str, params: dict = None):
 @app.post("/hubspot/webhook")
 async def hubspot_webhook(req: Request):
 
-    payload = await req.json()
+    print("===== HUBSPOT WEBHOOK RECEIVED =====")
 
-    print("\n===== HUBSPOT WEBHOOK RECEIVED =====")
-    print(json.dumps(payload, indent=2))
-    print("====================================\n")
+    body = await req.body()
 
-    return {
-        "status": "received"
-    }
+    print(body)
+
+    return {"status": "received"}
 
 
 @mcp.tool()
