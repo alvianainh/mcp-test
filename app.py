@@ -1,6 +1,6 @@
 import pandas as pd
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Query
 from fastapi.responses import HTMLResponse
 from mcp.server.fastmcp import FastMCP
 import os
@@ -45,6 +45,36 @@ async def hubspot_webhook(req: Request):
     print(body)
 
     return {"status": "received"}
+
+@app.get("/hubspot/oauth/callback")
+async def hubspot_oauth_callback(
+    code: str = Query(None),
+    state: str = Query(None)
+):
+    print("\n===== HUBSPOT OAUTH CALLBACK =====")
+    print("CODE:", code)
+    print("STATE:", state)
+
+    # tukar code ke access token
+    token_url = "https://api.hubapi.com/oauth/v1/token"
+
+    payload = {
+        "grant_type": "authorization_code",
+        "client_id": os.getenv("HUBSPOT_CLIENT_ID"),
+        "client_secret": os.getenv("HUBSPOT_CLIENT_SECRET"),
+        "redirect_uri": os.getenv("HUBSPOT_REDIRECT_URI"),
+        "code": code,
+    }
+
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
+
+    response = requests.post(token_url, data=payload, headers=headers)
+
+    print("TOKEN RESPONSE:", response.text)
+
+    return {"status": "oauth_done"}
 
 
 @mcp.tool()
