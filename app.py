@@ -1,6 +1,6 @@
 import pandas as pd
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from mcp.server.fastmcp import FastMCP
 import os
@@ -11,7 +11,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 HUBSPOT_TOKEN = os.getenv("HUBSPOT_TOKEN")
-
 
 app = FastAPI()
 
@@ -34,6 +33,20 @@ def hubspot_get(endpoint: str, params: dict = None):
     response.raise_for_status()
 
     return response.json()
+
+@app.post("/hubspot/webhook")
+async def hubspot_webhook(req: Request):
+
+    payload = await req.json()
+
+    print("\n===== HUBSPOT WEBHOOK RECEIVED =====")
+    print(json.dumps(payload, indent=2))
+    print("====================================\n")
+
+    return {
+        "status": "received"
+    }
+
 
 @mcp.tool()
 def get_all_contacts() -> list:
